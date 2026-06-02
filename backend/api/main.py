@@ -31,9 +31,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 try:
-    from api.capture import flow_tracker, rule_manager, broadcaster, session, start_pcap_task, stop_capture
+    from api.capture import flow_tracker, rule_manager, broadcaster, session, start_pcap_task, stop_capture, list_interfaces, start_live_task
 except ImportError:
-    from .capture import flow_tracker, rule_manager, broadcaster, session, start_pcap_task, stop_capture  # type: ignore
+    from .capture import flow_tracker, rule_manager, broadcaster, session, start_pcap_task, stop_capture, list_interfaces, start_live_task  # type: ignore
 
 # ── Read allowed origins from env and combine with fallback origins ───────────
 raw_origins = os.getenv("ALLOWED_ORIGINS", "")
@@ -72,6 +72,24 @@ async def ws_live(websocket: WebSocket):
 
 
 # ── Capture endpoints ─────────────────────────────────────────────────────────
+@app.get("/api/capture/interfaces")
+async def get_interfaces():
+    return list_interfaces()
+
+
+class LiveCaptureIn(BaseModel):
+    interface: str
+
+
+@app.post("/api/capture/live")
+async def start_live_capture(payload: LiveCaptureIn):
+    if session.running:
+        raise HTTPException(status_code=409, detail="A capture is already running. Stop it first.")
+
+    start_live_task(payload.interface)
+    return {"status": "started", "session_id": session.session_id, "interface": payload.interface}
+
+
 @app.post("/api/capture/upload")
 async def upload_pcap(file: UploadFile = File(...)):
     if session.running:
@@ -124,7 +142,11 @@ async def add_rule(rule: RuleIn):
     elif t == "domain":
         rule_manager.block_domain(v)
     elif t == "port":
-        rule_manager.block_port(int(v))
+        try:
+            port_val = int(v)
+            rule_manager.block_port(port_val)
+        except ValueError:
+            raise HTTPException(400, "Port must be a valid integer number (e.g. 443)")
     else:
         raise HTTPException(400, "type must be: ip | app | domain | port")
 
@@ -138,7 +160,12 @@ async def delete_rule(rule_type: str, value: str):
     if t == "ip":       rule_manager.unblock_ip(value)
     elif t == "app":    rule_manager.unblock_app(value)
     elif t == "domain": rule_manager.unblock_domain(value)
-    elif t == "port":   rule_manager.unblock_port(int(value))
+    elif t == "port":
+        try:
+            port_val = int(value)
+            rule_manager.unblock_port(port_val)
+        except ValueError:
+            raise HTTPException(400, "Port must be a valid integer")
     else:
         raise HTTPException(400, "type must be: ip | app | domain | port")
 

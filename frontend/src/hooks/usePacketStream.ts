@@ -128,6 +128,25 @@ export function usePacketStream() {
     return res.json();
   }, []);
 
+  const startLiveCapture = useCallback(async (ifaceName: string) => {
+    setSessionDone(false);
+    setPackets([]);
+    setBlocked([]);
+    setStats({ totalPackets: 0, totalBytes: 0, dropped: 0, activeFlows: 0, appBreakdown: {}, running: true });
+
+    const res = await fetch(`${API_URL}/api/capture/live`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ interface: ifaceName }),
+    });
+    return res.json();
+  }, []);
+
+  const fetchInterfaces = useCallback(async () => {
+    const res = await fetch(`${API_URL}/api/capture/interfaces`);
+    return res.json();
+  }, []);
+
   const stopCapture = useCallback(async () => {
     await fetch(`${API_URL}/api/capture/stop`, { method: "POST" });
     setStats((s) => ({ ...s, running: false }));
@@ -162,7 +181,7 @@ export function usePacketStream() {
 
   return {
     connected, packets, blocked, stats, sessionDone,
-    uploadPcap, stopCapture, addRule, removeRule,
+    uploadPcap, startLiveCapture, fetchInterfaces, stopCapture, addRule, removeRule,
     fetchRules, fetchHistory, fetchAppHistory,
     API_URL,
   };

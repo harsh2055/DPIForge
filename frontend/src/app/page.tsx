@@ -11,7 +11,7 @@ import styles from "./page.module.css";
 export default function DashboardPage() {
   const {
     connected, packets, blocked, stats, sessionDone,
-    uploadPcap, stopCapture, addRule, removeRule,
+    uploadPcap, startLiveCapture, fetchInterfaces, stopCapture, addRule, removeRule,
     fetchRules,
   } = usePacketStream();
 
@@ -35,6 +35,8 @@ export default function DashboardPage() {
                   removeRule={removeRule}
                   fetchRules={fetchRules}
                   uploadPcap={uploadPcap}
+                  startLiveCapture={startLiveCapture}
+                  fetchInterfaces={fetchInterfaces}
                   stopCapture={stopCapture}
                   running={stats.running}
                   connected={connected}

@@ -106,3 +106,76 @@
   flex-shrink: 0;
 }
 .ruleRemove:hover { color: var(--magenta); }
+
+/* Tabs styling */
+.tabs {
+  display: flex;
+  background: var(--bg-deep);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 2px;
+  margin-bottom: 0.75rem;
+}
+
+.tab {
+  flex: 1;
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 0.5rem 0.25rem;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all var(--t-fast);
+  text-align: center;
+}
+
+.tabActive {
+  background: var(--bg-card);
+  color: var(--cyan);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+/* Interface details styling */
+.interfaceSelectWrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.ifaceDetails {
+  background: rgba(0, 200, 255, 0.05);
+  border: 1px solid rgba(0, 200, 255, 0.15);
+  border-radius: var(--radius-sm);
+  padding: 0.5rem 0.75rem;
+  font-size: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.ifaceDetailRow {
+  display: flex;
+  justify-content: space-between;
+}
+
+.ifaceDetailLabel {
+  color: var(--text-dim);
+}
+
+.ifaceDetailValue {
+  color: var(--cyan);
+  font-family: var(--font-mono);
+}
+
+.liveActions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.sniffBtn {
+  width: 100%;
+}
