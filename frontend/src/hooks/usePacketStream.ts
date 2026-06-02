@@ -75,6 +75,15 @@ export function usePacketStream() {
     ws.onmessage = (e) => {
       const data: PacketEvent = JSON.parse(e.data);
 
+      if (data.event === "start") {
+        setStats((prev) => ({
+          ...prev,
+          running: true,
+        }));
+        setSessionDone(false);
+        return;
+      }
+
       if (data.event === "done") {
         setStats((prev) => ({
           ...prev,
@@ -100,6 +109,7 @@ export function usePacketStream() {
           totalBytes: prev.totalBytes + (data.bytes ?? 0),
           dropped: data.action === "DROP" ? prev.dropped + 1 : prev.dropped,
           running: true,
+          activeFlows: data.active_flows ?? prev.activeFlows,
           appBreakdown: data.app
             ? {
                 ...prev.appBreakdown,

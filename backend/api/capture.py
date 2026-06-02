@@ -69,6 +69,7 @@ async def process_pcap(pcap_path: str):
     session.reset()
     session.running = True
     flow_tracker.clear()
+    await broadcaster.broadcast({"event": "start", "running": True})
 
     try:
         with PcapReader(pcap_path) as reader:
@@ -139,6 +140,7 @@ async def process_pcap(pcap_path: str):
                     "action":   action,
                     "block_reason": reason or "",
                     "tcp_flags": parsed.tcp_flags if parsed.has_tcp else 0,
+                    "active_flows": flow_tracker.active_count(),
                 }
 
                 await broadcaster.broadcast(event)
@@ -198,6 +200,7 @@ async def process_live(iface_name: str):
     session.reset()
     session.running = True
     flow_tracker.clear()
+    await broadcaster.broadcast({"event": "start", "running": True})
 
     loop = asyncio.get_running_loop()
 
@@ -276,6 +279,7 @@ async def process_live(iface_name: str):
             "action":   action,
             "block_reason": reason or "",
             "tcp_flags": parsed.tcp_flags if parsed.has_tcp else 0,
+            "active_flows": flow_tracker.active_count(),
         }
 
         asyncio.run_coroutine_threadsafe(broadcaster.broadcast(event), loop)

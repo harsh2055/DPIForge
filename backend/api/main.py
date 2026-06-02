@@ -136,7 +136,12 @@ async def get_rules():
 async def add_rule(rule: RuleIn):
     t, v = rule.type.lower(), rule.value.strip()
     if t == "ip":
-        rule_manager.block_ip(v)
+        try:
+            import ipaddress
+            ipaddress.ip_address(v)
+            rule_manager.block_ip(v)
+        except ValueError:
+            raise HTTPException(400, f"Invalid IPv4 address format: '{v}'. Please enter a valid IP (e.g. 192.168.1.1)")
     elif t == "app":
         rule_manager.block_app(v)
     elif t == "domain":

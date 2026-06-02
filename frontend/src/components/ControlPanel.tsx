@@ -83,8 +83,29 @@ export function ControlPanel({
 
   async function handleAddRule(e: React.FormEvent) {
     e.preventDefault();
-    if (!ruleValue.trim()) return;
-    await addRule(ruleType, ruleValue.trim());
+    const val = ruleValue.trim();
+    if (!val) return;
+
+    if (ruleType === "ip") {
+      const ipPattern = /^(\d{1,3}\.){3}\d{1,3}$/;
+      if (!ipPattern.test(val)) {
+        alert("Please enter a valid IPv4 address (e.g., 192.168.1.1)");
+        return;
+      }
+      const octets = val.split(".").map(Number);
+      if (octets.some((o) => o < 0 || o > 255)) {
+        alert("Each octet in the IP address must be between 0 and 255.");
+        return;
+      }
+    } else if (ruleType === "port") {
+      const portVal = parseInt(val, 10);
+      if (isNaN(portVal) || portVal < 1 || portVal > 65535 || String(portVal) !== val) {
+        alert("Please enter a valid port number between 1 and 65535.");
+        return;
+      }
+    }
+
+    await addRule(ruleType, val);
     setRuleValue("");
     await refreshRules();
   }
