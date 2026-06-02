@@ -30,10 +30,10 @@ from fastapi import FastAPI, File, UploadFile, WebSocket, WebSocketDisconnect, H
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from .capture import (
-    flow_tracker, rule_manager, broadcaster, session,
-    start_pcap_task, stop_capture,
-)
+try:
+    from api.capture import flow_tracker, rule_manager, broadcaster, session, start_pcap_task, stop_capture
+except ImportError:
+    from .capture import flow_tracker, rule_manager, broadcaster, session, start_pcap_task, stop_capture  # type: ignore
 
 # ── Read allowed origins from env (set this in Render dashboard) ──────────────
 ALLOWED_ORIGINS = os.getenv(

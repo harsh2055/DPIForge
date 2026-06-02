@@ -20,12 +20,22 @@ import time
 import uuid
 from typing import Optional
 
-from ..engine.packet_parser import PcapReader, PacketParser
-from ..engine.sni_extractor import extract_sni, extract_http_host, extract_dns_query, extract_quic_sni
-from ..engine.app_classifier import sni_to_app, port_to_app
-from ..engine.flow_tracker import FlowTracker
-from ..engine.rule_manager import RuleManager
-from .broadcaster import Broadcaster
+# Absolute imports — works whether run as a package or from backend/ root
+try:
+    from engine.packet_parser import PcapReader, PacketParser
+    from engine.sni_extractor import extract_sni, extract_http_host, extract_dns_query, extract_quic_sni
+    from engine.app_classifier import sni_to_app, port_to_app
+    from engine.flow_tracker import FlowTracker
+    from engine.rule_manager import RuleManager
+    from api.broadcaster import Broadcaster
+except ImportError:
+    # Fallback for local development where backend is a package
+    from ..engine.packet_parser import PcapReader, PacketParser  # type: ignore
+    from ..engine.sni_extractor import extract_sni, extract_http_host, extract_dns_query, extract_quic_sni  # type: ignore
+    from ..engine.app_classifier import sni_to_app, port_to_app  # type: ignore
+    from ..engine.flow_tracker import FlowTracker  # type: ignore
+    from ..engine.rule_manager import RuleManager  # type: ignore
+    from .broadcaster import Broadcaster  # type: ignore
 
 # ── Shared singletons (imported by FastAPI routes) ────────────────────────────
 flow_tracker = FlowTracker()
