@@ -2,20 +2,21 @@
 main.py — FastAPI application entry point.
 
 Routes:
-  POST /api/capture/upload      — Upload a PCAP file and start processing
-  POST /api/capture/stop        — Stop a running capture
-  GET  /api/capture/status      — Current session status
+  POST /api/capture/upload         — Upload a PCAP file and start processing
+  POST /api/capture/stop           — Stop a running capture
+  GET  /api/capture/status         — Current session status
 
-  GET  /api/rules               — Get all blocking rules
-  POST /api/rules               — Add a blocking rule
-  DELETE /api/rules/{type}/{value} — Remove a blocking rule
+  GET  /api/rules                  — Get all blocking rules
+  POST /api/rules                  — Add a blocking rule  { type, value }
+  DELETE /api/rules/{type}/{value} — Remove a specific blocking rule
+  DELETE /api/rules                — Clear all rules
 
-  GET  /api/stats/summary       — Live session stats
-  GET  /api/stats/flows         — Active flows list
-  GET  /api/stats/history       — Historical sessions from DB
-  GET  /api/stats/app-history   — Per-session app breakdown
+  GET  /api/stats/summary          — Live in-memory session stats
+  GET  /api/stats/flows            — Active flows list
 
-  WS   /ws/live                 — Live packet event stream
+  WS   /ws/live                    — Live packet event stream (WebSocket)
+
+No database — all state is in-memory (resets when server restarts).
 """
 
 from __future__ import annotations
@@ -23,10 +24,9 @@ from __future__ import annotations
 import os
 import shutil
 import tempfile
-from contextlib import asynccontextmanager
 from typing import Optional
 
-from fastapi import FastAPI, File, Form, UploadFile, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi import FastAPI, File, UploadFile, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -34,22 +34,18 @@ from .capture import (
     flow_tracker, rule_manager, broadcaster, session,
     start_pcap_task, stop_capture,
 )
-from ..db.database import db
 
+# ── Read allowed origins from env (set this in Render dashboard) ──────────────
+ALLOWED_ORIGINS = os.getenv(
+    "ALLOWED_ORIGINS",
+    "http://localhost:3000,http://127.0.0.1:3000"
+).split(",")
 
-# ── Lifespan (DB connect/close) ───────────────────────────────────────────────
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    await db.connect()
-    yield
-    await db.close()
-
-
-app = FastAPI(title="DPI Packet Analyzer API", version="2.0.0", lifespan=lifespan)
+app = FastAPI(title="DPIForge API", version="2.0.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -62,7 +58,6 @@ async def ws_live(websocket: WebSocket):
     await broadcaster.connect(websocket)
     try:
         while True:
-            # Keep connection open; client can send pings
             await websocket.receive_text()
     except WebSocketDisconnect:
         await broadcaster.disconnect(websocket)
@@ -74,9 +69,7 @@ async def upload_pcap(file: UploadFile = File(...)):
     if session.running:
         raise HTTPException(status_code=409, detail="A capture is already running. Stop it first.")
 
-    # Save upload to a temp file
-    suffix = ".pcap"
-    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".pcap")
     shutil.copyfileobj(file.file, tmp)
     tmp.close()
 
@@ -125,14 +118,7 @@ async def add_rule(rule: RuleIn):
     elif t == "port":
         rule_manager.block_port(int(v))
     else:
-        raise HTTPException(400, "type must be ip | app | domain | port")
-
-    # Persist to DB
-    await db._db.execute(
-        "INSERT INTO block_rules (type, value, active, created_at) VALUES (?,?,1,strftime('%s','now'))",
-        (t, v)
-    )
-    await db._db.commit()
+        raise HTTPException(400, "type must be: ip | app | domain | port")
 
     await broadcaster.broadcast({"event": "rule_added", "type": t, "value": v})
     return {"status": "ok", "type": t, "value": v}
@@ -141,12 +127,12 @@ async def add_rule(rule: RuleIn):
 @app.delete("/api/rules/{rule_type}/{value}")
 async def delete_rule(rule_type: str, value: str):
     t = rule_type.lower()
-    if t == "ip":      rule_manager.unblock_ip(value)
-    elif t == "app":   rule_manager.unblock_app(value)
+    if t == "ip":       rule_manager.unblock_ip(value)
+    elif t == "app":    rule_manager.unblock_app(value)
     elif t == "domain": rule_manager.unblock_domain(value)
-    elif t == "port":  rule_manager.unblock_port(int(value))
+    elif t == "port":   rule_manager.unblock_port(int(value))
     else:
-        raise HTTPException(400, "type must be ip | app | domain | port")
+        raise HTTPException(400, "type must be: ip | app | domain | port")
 
     await broadcaster.broadcast({"event": "rule_removed", "type": t, "value": value})
     return {"status": "ok"}
@@ -163,13 +149,13 @@ async def clear_rules():
 @app.get("/api/stats/summary")
 async def stats_summary():
     return {
-        "total_packets":  session.total_packets,
-        "total_bytes":    session.total_bytes,
-        "dropped":        session.dropped,
-        "active_flows":   flow_tracker.active_count(),
-        "total_flows":    flow_tracker.total_count(),
-        "app_breakdown":  flow_tracker.app_breakdown(),
-        "running":        session.running,
+        "total_packets": session.total_packets,
+        "total_bytes":   session.total_bytes,
+        "dropped":       session.dropped,
+        "active_flows":  flow_tracker.active_count(),
+        "total_flows":   flow_tracker.total_count(),
+        "app_breakdown": flow_tracker.app_breakdown(),
+        "running":       session.running,
     }
 
 
@@ -178,21 +164,6 @@ async def stats_flows(limit: int = 200):
     return flow_tracker.get_all()[:limit]
 
 
-@app.get("/api/stats/history")
-async def stats_history(limit: int = 20):
-    return await db.get_sessions(limit)
-
-
-@app.get("/api/stats/app-history")
-async def stats_app_history():
-    return await db.get_app_history()
-
-
-@app.get("/api/stats/db-flows")
-async def stats_db_flows(session_id: Optional[str] = None, limit: int = 200):
-    return await db.get_flows(session_id, limit)
-
-
 @app.get("/")
 async def root():
-    return {"message": "DPI Packet Analyzer API v2.0 — connect your frontend to /ws/live"}
+    return {"message": "DPIForge API v2.0 — connect your frontend to /ws/live"}

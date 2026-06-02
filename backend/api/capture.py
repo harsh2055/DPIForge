@@ -2,14 +2,15 @@
 capture.py — The core packet processing pipeline.
 
 Runs as a background asyncio task:
-  1. Reads packets from a PCAP file (or live interface via Scapy)
+  1. Reads packets from a PCAP file
   2. Parses each packet (packet_parser.py)
   3. Extracts SNI / HTTP Host / DNS (sni_extractor.py)
   4. Classifies app (app_classifier.py)
   5. Checks blocking rules (rule_manager.py)
   6. Updates flow table (flow_tracker.py)
   7. Broadcasts a JSON event to all connected WebSocket clients
-  8. Persists the flow to the SQLite DB (database.py)
+
+No database — everything runs in memory.
 """
 
 from __future__ import annotations
@@ -17,7 +18,6 @@ from __future__ import annotations
 import asyncio
 import time
 import uuid
-from pathlib import Path
 from typing import Optional
 
 from ..engine.packet_parser import PcapReader, PacketParser
@@ -26,7 +26,6 @@ from ..engine.app_classifier import sni_to_app, port_to_app
 from ..engine.flow_tracker import FlowTracker
 from ..engine.rule_manager import RuleManager
 from .broadcaster import Broadcaster
-from ..db.database import db
 
 # ── Shared singletons (imported by FastAPI routes) ────────────────────────────
 flow_tracker = FlowTracker()
@@ -115,7 +114,7 @@ async def process_pcap(pcap_path: str):
                 if action == "DROP":
                     session.dropped += 1
 
-                # ── Build event ───────────────────────────────────────────────
+                # ── Build and broadcast event ─────────────────────────────────
                 event = {
                     "event":    "block" if (reason and flow.packets == 1) else "packet",
                     "ts":       raw_pkt.ts_sec + raw_pkt.ts_usec / 1_000_000,
@@ -134,11 +133,7 @@ async def process_pcap(pcap_path: str):
 
                 await broadcaster.broadcast(event)
 
-                # ── Persist flow to DB (only on first packet) ─────────────────
-                if flow.packets == 1:
-                    await db.save_flow(session.session_id, flow)
-
-                # Tiny yield to keep event loop responsive
+                # Tiny yield to keep the event loop responsive
                 await asyncio.sleep(0)
 
         # ── Session complete ──────────────────────────────────────────────────
@@ -152,7 +147,6 @@ async def process_pcap(pcap_path: str):
             "duration_sec":  round(time.time() - session.start_time, 2),
         }
         await broadcaster.broadcast(summary)
-        await db.save_session(session)
 
     except Exception as exc:
         await broadcaster.broadcast({"event": "error", "message": str(exc)})
