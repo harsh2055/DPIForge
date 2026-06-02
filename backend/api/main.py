@@ -35,12 +35,19 @@ try:
 except ImportError:
     from .capture import flow_tracker, rule_manager, broadcaster, session, start_pcap_task, stop_capture  # type: ignore
 
-# ── Read allowed origins from env (set this in Render dashboard) ──────────────
-raw_origins = os.getenv(
-    "ALLOWED_ORIGINS",
-    "http://localhost:3000,http://127.0.0.1:3000,https://dpi-forge.vercel.app,https://dpiforge.vercel.app"
-)
-ALLOWED_ORIGINS = [origin.strip().strip('"').strip("'") for origin in raw_origins.split(",") if origin.strip()]
+# ── Read allowed origins from env and combine with fallback origins ───────────
+raw_origins = os.getenv("ALLOWED_ORIGINS", "")
+ALLOWED_ORIGINS = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "https://dpi-forge.vercel.app",
+    "https://dpiforge.vercel.app"
+]
+if raw_origins:
+    for origin in raw_origins.split(","):
+        o = origin.strip().strip('"').strip("'")
+        if o and o not in ALLOWED_ORIGINS:
+            ALLOWED_ORIGINS.append(o)
 
 app = FastAPI(title="DPIForge API", version="2.0.0")
 
